@@ -1,27 +1,48 @@
-name: Pull Request Checks
+name: Check if PR is up-to-date
 
 on:
   pull_request:
     types: [opened, synchronize]
 
 jobs:
-  check-up-to-date:
+  check-branch:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout the PR branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
 
-    - name: Fetch all branches
-      run: git fetch --all
+      - name: Checkout the base branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.base_ref }}
+          path: base-branch
 
-    - name: Check if the branch is up-to-date with base branch
-      run: |
-        git fetch origin ${{ github.event.pull_request.base.ref }}
-        git checkout ${{ github.event.pull_request.head.ref }}
-        git merge --no-commit --no-ff origin/${{ github.event.pull_request.base.ref }} || echo "Out of date with base branch"
-      continue-on-error: true
+      - name: Check for merge conflicts
+        run: |
+          git fetch origin ${{ github.base_ref }}:$GITHUB_SHA
+          if ! git merge-tree $GITHUB_SHA HEAD --name-only; then
+            echo "Conflicts detected"
+            exit 1
+          else
+            echo "No conflicts"
+          fi
 
-    - name: Check for conflicts with base branch
-      run: |
-        git merge --no-commit --no-ff origin/${{ github.event.pull_request.base.ref }}
-      continue-on-error: true
+      - name: Check if the branch is up to date with the base branch
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
+            echo "::set-output name=out_of_date::true"
+          else
+            echo "::set-output name=out_of_date::false"
+          fi
+        id: check_up_to_date
+
+      - name: Add "Update Branch" button
+        if: steps.check_up_to_date.outputs.out_of_date == 'true'
+        run: |
+          echo "Branch is out of date with base. Please update the branch."
+          exit 1
+
