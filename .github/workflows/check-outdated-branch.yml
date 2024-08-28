@@ -1,34 +1,21 @@
-name: Check if branch is out of date
+name: Check Branch Up-to-Date
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, reopened, synchronize]
 
 jobs:
-  check-outdated-branch:
+  check-branch-up-to-date:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout base branch
-      uses: actions/checkout@v3
-      with:
-        ref: ${{ github.event.pull_request.base.ref }}
-
-    - name: Checkout head branch
-      uses: actions/checkout@v3
-      with:
-        ref: ${{ github.event.pull_request.head.ref }}
-        path: head_branch
-
-    - name: Compare with base branch
-      run: |
-        git fetch origin ${{ github.event.pull_request.base.ref }}
-        BASE_COMMIT=$(git rev-parse ${{ github.event.pull_request.base.ref }})
-        HEAD_COMMIT=$(git -C head_branch rev-parse ${{ github.event.pull_request.head.ref }})
-        
-        if [ "$BASE_COMMIT" != "$HEAD_COMMIT" ]; then
-          echo "Branch is out of date with the base branch. Please update the branch."
-          exit 1
-        else
-          echo "Branch is up-to-date with the base branch."
-        fi
+      - uses: actions/checkout@v3
+      - name: Check Branch Up-to-Date
+        run: |
+          git fetch origin
+          git rev-list --count --left-right origin/main...${{ github.head_ref }}
+          if [ $? -eq 0 ]; then
+            echo "Branch is up-to-date"
+          else
+            echo "Branch is out-of-date"
+            exit 1
+          fi
